@@ -13,7 +13,7 @@ spring:
   r2dbc:
     username: postgres
     password: mysecretpassword
-    url: r2dbc:postgresql://localhost:5433/polardb_order
+    url: r2dbc:postgresql://localhost:5432/polardb_order
     pool:
       max-create-connection-time: 2s
       initial-size: 5
@@ -21,12 +21,14 @@ spring:
   flyway:
     user: ${spring.r2dbc.username}
     password: ${spring.r2dbc.password}
-    url: jdbc:postgresql://localhost:5433/polardb_order
+    url: jdbc:postgresql://localhost:5432/polardb_order
   config:
     import: "optional:configserver:"
   cloud:
     config:
       uri: http://localhost:8888
+      username: user
+      password: password
       request-connect-timeout: 5000 # 5s
       request-read-timeout: 5000 # 5s
       fail-fast: false # In production, set to true
@@ -35,6 +37,64 @@ spring:
         initial-interval: 1000 # 1s
         max-interval: 2000 # 2s
         multiplier: 1.1
+    bus:
+      enabled: false
+    function:
+      definition: dispatchOrder
+    stream:
+#      source: acceptOrder
+      bindings:
+        dispatchOrder-in-0:
+          destination: order-dispatched
+          group: ${spring.application.name}
+        acceptOrder-out-0:
+          destination: order-accepted
+      rabbit:
+        bindings:
+          acceptOrder-out-0:
+            producer:
+              transacted: true
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_URL:http://localhost:8080}/realms/PolarBookshop
+          # jwk-set-uri: http://localhost:8080/realms/PolarBookshop/protocol/openid-connect/certs
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: user
+    password: password
+    connection-timeout: 5s
 
+logging:
+  pattern:
+    level: "%5p [${spring.application.name},%X{trace_id},%X{span_id}]" 
+    
+info:
+  system: Polar Bookshop       
+    
+management:
+  endpoints:
+    web:
+      exposure:
+        include: bindings, configprops, env, flyway, functions, health, heapdump, info, loggers, mappings, prometheus
+  endpoint:
+    health:
+      show-details: always
+      show-components: always
+      probes:
+        enabled: true
+  info:
+    env:
+      enabled: true
+    java:
+      enabled: true
+    os:
+      enabled: true        
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    
 polar:
   catalog-service-url: "http://localhost:9001"
